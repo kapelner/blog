@@ -10,21 +10,24 @@ website:
   navbar:
     left:
       - href: index.qmd
-        text: Posts
+        text: All posts
+      - href: r.qmd
+        text: R posts
       - href: about.qmd
         text: About
     right:
       - icon: github
         href: https://github.com/kapelner
       - icon: rss
-        href: index.xml
+        href: r.xml
+        text: "R feed"
   page-footer:
     left: "© Adam Kapelner"
     center: "Blogroll: [R-bloggers](https://www.r-bloggers.com) · [subscribe to the R-bloggers feed](http://feeds.feedburner.com/RBloggers)"
     right:
       - icon: rss
-        href: index.xml
-        text: RSS
+        href: r.xml
+        text: R-only RSS
 
 format:
   html:

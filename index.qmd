@@ -1,5 +1,5 @@
 ---
-title: "Posts"
+title: "All posts"
 listing:
   contents: posts
   sort: "date desc"
@@ -8,8 +8,11 @@ listing:
   feed:
     type: full
     items: 20
-    title: "EDI (Experimental Design and Inference)"
-    description: "R packages, statistics, and the C++ underneath them."
+    title: "EDI (Experimental Design and Inference) — all posts"
+    description: "R packages, statistics, and the C++ underneath them (includes non-R-specific posts; see r.qmd for the R-only feed)."
 page-layout: full
 title-block-banner: false
 ---
+
+Every post, R and non-R alike. For the R-only feed (what's registered with
+R-bloggers), see [R posts](r.qmd).

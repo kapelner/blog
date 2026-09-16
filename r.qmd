@@ -1,0 +1,21 @@
+---
+title: "R posts"
+listing:
+  id: r-posts
+  contents: posts/r
+  sort: "date desc"
+  type: default
+  categories: true
+  feed:
+    type: full
+    items: 20
+    title: "EDI (Experimental Design and Inference) — R posts"
+    description: "R packages and statistics -- the R-only feed (no Python/C++-only posts)."
+page-layout: full
+title-block-banner: false
+---
+
+This is the **R-only** feed: everything here is R-package/R-statistics
+content, kept separate from the site's general feed (which may also carry
+Python- or pure-C++-focused posts) so R-bloggers only ever sees R content.
+RSS: [r.xml](r.xml). Everything, including non-R posts: [index.xml](index.xml).
