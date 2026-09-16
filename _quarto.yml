@@ -3,7 +3,7 @@ project:
   output-dir: _site
 
 website:
-  title: "Adam Kapelner"
+  title: "EDI (Experimental Design and Inference)"
   description: "R packages, statistics, and the C++ underneath them."
   site-url: "https://kapelner.github.io/blog/"
   page-navigation: true

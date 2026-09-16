@@ -8,7 +8,7 @@ listing:
   feed:
     type: full
     items: 20
-    title: "Adam Kapelner: R, statistics, and C++"
+    title: "EDI (Experimental Design and Inference)"
     description: "R packages, statistics, and the C++ underneath them."
 page-layout: full
 title-block-banner: false
