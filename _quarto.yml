@@ -20,6 +20,7 @@ website:
         href: index.xml
   page-footer:
     left: "© Adam Kapelner"
+    center: "Blogroll: [R-bloggers](https://www.r-bloggers.com) · [subscribe to the R-bloggers feed](http://feeds.feedburner.com/RBloggers)"
     right:
       - icon: rss
         href: index.xml
