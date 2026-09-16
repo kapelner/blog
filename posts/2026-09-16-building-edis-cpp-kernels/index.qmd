@@ -1,0 +1,72 @@
+---
+title: "Building EDI's C++ kernels once, shipping them to two languages"
+description: "A short note on why EDI's model-fitting kernels are C++ underneath, and how the same source compiles into both an R package and a Python package."
+date: 2026-09-16
+categories: [r, python, c++, edi]
+---
+
+I'm building [EDI](https://github.com/kapelner/EDI) (Experimental Design
+and Inference), an R package for randomized experimental designs — fixed
+designs like blocking and optimal MILP-based allocation, and sequential
+designs like matching-on-the-fly and covariate-adaptive randomization —
+paired with inference procedures matched to each design and response type.
+This post isn't about the statistics; it's a short engineering note on one
+design decision that turned out to matter more than I expected: **every
+model-fitting kernel is C++, and the same C++ source ships to two
+languages.**
+
+## Why C++ at all
+
+EDI's whole point is that a design's assignment mechanism should carry
+into its analysis — matched pairs get matched-pair inference, blocked
+designs get block-aware standard errors, and so on. That means a lot of
+resampling: bootstrap, jackknife, randomization tests, simulation studies
+for power analysis. Every one of those re-fits a model dozens to
+thousands of times. At that scale, the model fit itself is the bottleneck,
+and pure R (even vectorized) loses to a compiled fit by one to three
+orders of magnitude on the model families I care about — GLMs, GLMMs,
+survival regressions, ordinal models. So the kernels — the actual
+IRLS/Newton optimization loops — are written in C++ against
+[Eigen](https://eigen.tuxfamily.org/) for the linear algebra and
+[LBFGS++](https://github.com/yixuan/LBFGSpp) for optimization-based fits,
+called from R via [Rcpp](https://www.rcpp.org/)/RcppEigen.
+
+## The part I didn't expect to matter: `EDI_CORE_ONLY`
+
+The R package needs `Rcpp::List` return types, R's RNG, R's math library
+(`Rmath`) for distribution functions, and needs to run inside R's memory
+model. None of that exists in a standalone C++ build. So every kernel file
+in `R/EDI/src/` is written once, with the R-specific glue wrapped in
+`#ifndef EDI_CORE_ONLY` guards. Compile with that macro defined, and the
+same file becomes plain C++: `Eigen::VectorXd` in, `Eigen::VectorXd` out,
+no R anywhere.
+
+That's what makes [`edi_kernels`](https://pypi.org/project/edi_kernels/) —
+the Python bindings — possible without a second implementation. The
+Python package's CMake build `#include`s the R package's own `.cpp`/`.h`
+files directly out of `R/EDI/src/`, compiles them under `EDI_CORE_ONLY`,
+and wraps the result with [pybind11](https://pybind11.readthedocs.io/).
+Nothing under `python/` is a copy of a kernel file — it's the same source,
+a different preprocessor path. When a model-fitting bug gets fixed on the
+R side, the Python bindings inherit the fix on their next build, verbatim,
+because it's the same `.cpp` file.
+
+## What this actually buys
+
+Concretely: no "port the R fix to Python" step, no second set of
+numerical bugs to find, and — since the underlying kernel is identical —
+a benchmark that's honest about what it's comparing. The tradeoff is
+discipline: anything R-specific has to stay inside the guard, so there's a
+small CI check (`check_core_no_rcpp.sh`) that fails the build if a stray
+`Rcpp::`/`SEXP` reference leaks outside it — cheap insurance against the
+one mistake this whole approach is fragile to.
+
+This is a small post — mostly a note-to-self and a pointer for anyone
+building a package that's going to need more than one language's bindings
+eventually. If you're in that position before you've written the kernel,
+building the R-specific glue as an opt-out from day one is a lot cheaper
+than retrofitting it after 100+ files exist.
+
+**Links:** [EDI on GitHub](https://github.com/kapelner/EDI) ·
+[EDI docs](https://kapelner.github.io/EDI/) ·
+[`edi_kernels` on PyPI](https://pypi.org/project/edi_kernels/)

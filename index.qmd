@@ -1,0 +1,15 @@
+---
+title: "Posts"
+listing:
+  contents: posts
+  sort: "date desc"
+  type: default
+  categories: true
+  feed:
+    type: full
+    items: 20
+    title: "Adam Kapelner: R, statistics, and C++"
+    description: "R packages, statistics, and the C++ underneath them."
+page-layout: full
+title-block-banner: false
+---

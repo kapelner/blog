@@ -1,0 +1,33 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Adam Kapelner"
+  description: "R packages, statistics, and the C++ underneath them."
+  site-url: "https://kapelner.github.io/blog/"
+  page-navigation: true
+  navbar:
+    left:
+      - href: index.qmd
+        text: Posts
+      - href: about.qmd
+        text: About
+    right:
+      - icon: github
+        href: https://github.com/kapelner
+      - icon: rss
+        href: index.xml
+  page-footer:
+    left: "© Adam Kapelner"
+    right:
+      - icon: rss
+        href: index.xml
+        text: RSS
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    link-external-newwindow: true

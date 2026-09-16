@@ -1,0 +1,23 @@
+---
+title: "About"
+---
+
+I'm Adam Kapelner, a statistician working on experimental design and
+causal inference. This blog covers R packages I maintain, the statistics
+behind them, and — since most of my packages end up with a C++ core for
+speed — the engineering that goes into that core.
+
+**Packages:**
+
+- [`EDI`](https://kapelner.github.io/EDI/) (Experimental Design and
+  Inference) — fixed and sequential randomized experimental designs
+  (blocking, optimal designs, matching-on-the-fly, covariate-adaptive
+  randomization) with inference matched to each design and response type.
+  [Source](https://github.com/kapelner/EDI).
+- [`edi_kernels`](https://pypi.org/project/edi_kernels/) — Python bindings
+  to the same C++ model-fitting kernels, no R dependency.
+
+**Contact:** [adam.kapelner@mail.huji.ac.il](mailto:adam.kapelner@mail.huji.ac.il)
+
+**Elsewhere:** [GitHub](https://github.com/kapelner) ·
+[ORCID](https://orcid.org/0000-0001-5985-6792)
