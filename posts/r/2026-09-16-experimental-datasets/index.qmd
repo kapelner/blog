@@ -1,0 +1,302 @@
+---
+title: "262 real experimental datasets, and a real RCT run through EDI"
+description: "How we found 262 real randomized experiments on CRAN and Dataverse, what they look like, the R script that downloads them, and a live InferenceSuite run on a real dermatology RCT."
+date: 2026-09-16
+categories: [r, edi, data]
+---
+
+Hello — this is the launch post for the EDI blog.
+[EDI](https://github.com/kapelner/EDI) (Experimental Design and Inference) is
+an R package for randomized experimental designs — fixed designs like
+blocking and optimal MILP-based allocation, sequential designs like
+matching-on-the-fly and covariate-adaptive randomization — paired with
+inference procedures matched to each design and response type. We'd like to
+start with a post about something we needed in order to trust EDI on real
+data, not just simulations: a large collection of real, completed randomized
+experiments to replay through it.
+
+EDI ships with a comprehensive test suite built mostly on *synthetic* data:
+real covariate structure, simulated treatment assignment, simulated
+response — necessary for coverage/power validation, where you need to
+know the ground truth to check whether an interval actually covers it.
+But synthetic data can't validate one thing: does EDI correctly replay a
+**real, already-completed** randomized experiment's actual assignment
+mechanism and actual outcome? For that we needed real trials. This post
+is about finding 262 of them, what they look like, and running one
+through EDI end to end.
+
+## Finding them: five rounds, the last one exhaustive
+
+The search (documented in full in
+[`experimental_datasets.md`](https://github.com/kapelner/EDI/blob/main/R/package_metadata/experimental_datasets.md))
+went through five rounds of increasing thoroughness:
+
+- **Rounds 1–4** (27 datasets): repository search for known dataverses
+  (the Hayes & Moulton *Cluster Randomised Trials* textbook companion,
+  8 datasets), CRAN package-metadata keyword search (5 datasets), then a
+  **deep CRAN scan** pre-filtered to CRAN's ~9,700 `LazyData`-true
+  packages, scored against a domain keyword set, with the top 692
+  actually inspected (12 more confirmed).
+- **Round 5** (203 more datasets, the big one): after round 4's
+  keyword/`LazyData` pre-filtering was flagged as a real limitation — it
+  can miss a genuine dataset just because its title doesn't match a
+  keyword — round 5 instead checked **every one of CRAN's 25,043 scanned
+  packages' actual source tarballs for a real `/data` directory**. No
+  title, description, or field filtering at all. **11,173 of 25,043
+  (44.6%) had one.** Excluding the 630 packages already covered by
+  earlier rounds left 10,543 genuinely new candidates, each mechanically
+  harvested — tarball download, extract, `load()`/`fread()` the data
+  directly, parse the `.Rd` help page — **without ever running
+  `install.packages()`**. That produced ~13,150 dataset-level rows; every
+  one flagged by a "random"-language regex (2,607 of them) was reviewed
+  in full by five parallel AI review passes against one rigor bar —
+  explicit textual confirmation of random assignment to a real completed
+  study, excluding synthetic/simulated data, random *sampling* (not
+  *assignment*) language, aggregate/meta-analysis tables, and duplicates
+  — plus a ~600-row random spot-check of the *non-flagged* rows (zero
+  additional confirms there, which is what validates the regex flag as a
+  reliable prioritization signal rather than a lucky shortcut). 236
+  candidates were confirmed before deduplication; 203 survived as
+  genuinely new entries after removing repackaged duplicates (the same
+  Freireich 1963 leukemia trial and the same NIMH schizophrenia trial,
+  for instance, each turned up under 2–4 different CRAN packages).
+
+## What 262 real experiments look like
+
+The result: **262 datasets, 278 dataset×response-type pairs**, covering
+every one of EDI's six response types —
+
+| Response type | Core (pre-sweep) | Total (with round 5) |
+|---|---|---|
+| continuous | 8 | 129 |
+| survival | 9 | 47 |
+| incidence | 16 | 43 |
+| count | 7 | 26 |
+| ordinal | 3 | 17 |
+| proportion | 2 | 16 |
+
+— sourced three ways: 20 direct CRAN packages (`survival`, `medicaldata`,
+`geepack`, `AER`, …, extracted without installing them — more on that
+below), one GitHub-only package with no CRAN listing
+(`itamarcaspi/experimentdatar`), and the rest from Harvard Dataverse
+mirrors of J-PAL/IPA field-experiment archives and openICPSR studies.
+
+Three usage modes, not mutually exclusive: **covariate-source only** (real
+baseline covariates, synthetic response with known truth — same pattern
+as EDI's existing synthetic-benchmark datasets); **real assignment
+replay** (real covariates *and* real observed treatment assignment,
+synthetic response — validates inference against an actual realized
+randomization rather than an idealized one); and **full real replay**
+(real covariates, real assignment, real outcome, nothing synthetic — a
+genuine case study, what the demo below does). One dataset,
+`IVdataset` (Angrist & Krueger 1991), was evaluated and explicitly
+excluded: it's observational census data analyzed via an instrumental-
+variable strategy, not a randomized experiment — there's no real treatment design `W` to
+redraw from.
+
+One important constraint: **none of this real data ships with EDI or
+lives in this repository.** ICPSR/openICPSR terms prohibit
+redistribution without written agreement, and the CRAN-sourced ones stay
+exactly where CRAN already hosts them. The whole pipeline fetches live,
+cleans, converts to CSV and then 
+caches locally in compressed tar.bz2 files.
+
+## The download script
+
+[`download_experimental_datasets.R`](https://github.com/kapelner/EDI/blob/main/R/package_metadata/download_experimental_datasets.R)
+handles two genuinely different retrieval mechanisms, one per dataset
+depending on where it lives:
+
+**CRAN and GitHub packages, without `install.packages()`.** For a dataset
+that's just one object inside an R package's `data/` directory, the
+script downloads the package's own **source tarball** directly from
+`https://cran.r-project.org/src/contrib/`, `untar()`s it, and reads the
+one `.rda` file it actually needs straight out of `data/` — no
+`install.packages()`, no polluting the library, no dependency resolution.
+If the pinned version has since been superseded on CRAN's main listing
+(likely, since the round-5 sweep alone took hours across many parallel
+workers, and packages update continuously), it falls back to CRAN's
+`Archive/<pkg>/` for that exact version, and only as a last resort to
+whatever's currently on CRAN — deliberately never a silent substitution
+that could swap in a changed dataset, just a version-string mismatch that
+essentially never changes the classic dataset a package exists to ship.
+
+**Harvard Dataverse, with no account needed.** Confirmed working
+end-to-end: fetch the dataset's metadata to find the target file's
+numeric id and whether a "Guestbook" is required (a usage-tracking
+questionnaire some depositors attach — unrelated to the file's license,
+and satisfied with plain identity fields, not credentials); if so, `POST`
+a guestbook response to get back a signed download URL; then follow the
+resulting HTTP 303 redirect to a short-lived, pre-signed S3 URL. One real
+gotcha found the hard way: guestbook "options"-type answers must be
+submitted as the option's **string text**, not its numeric id — the
+numeric form looks equally plausible and 500s server-side with an opaque
+`ClassCastException` instead of a helpful error.
+
+Every dataset, regardless of source, ends up normalized to **plain CSV**
+(`.tab` retabbed, `.dta` read via `haven` and stripped of value/variable
+labels, zip-bundled files unzipped and the target member located
+recursively), and the whole output directory is packed into one
+`randomized_experiment_datasets.tar.bz2` — uniform format, and CSV text
+compresses well under bzip2 (two of the source zips alone are 99MB and
+221MB; only one small member file is kept from each after conversion, the
+rest discarded).
+
+## Showing one off: a dermatology RCT
+
+`mice::toenail` is one of round 5's 203 new finds (the `mice` package's
+own copy is identical to the classic `toenail`/`toenail2` dataset also
+distributed via `DPpackage` and `HSAUR3`) — a multicenter randomized trial
+comparing two oral antifungal treatments for toenail onychomycosis
+(De Backer et al. 1998, *Journal of the American Academy of Dermatology*).
+294 patients, randomized essentially 50/50 (148 to itraconazole, 146 to
+terbinafine so the desig is assumed to be a "Bernoulli" design), followed over seven visits with the degree of nail
+separation scored at each one.
+
+The raw data is longitudinal — up to 7 rows per patient — so replaying it
+through EDI's fixed-design framework needs one response per subject. We
+used each patient's outcome at their **last recorded visit**
+(0 = none/mild nail separation, 1 = moderate/severe) as the response (incidence type), and
+their **baseline (first-visit) severity** plus **number of visits
+completed** as covariates — both measured before, or as a byproduct of,
+the randomized treatment, not affected by it.
+
+Fetching it hit the same Archive fallback logic as before: the pinned
+`mice` version had already been superseded on CRAN's main listing by the
+time this ran, so `cran_download_dataset_as_csv()` fell back to
+`src/contrib/Archive/mice/`, found the exact pinned version there, and
+extracted `toenail.rda` straight out of the tarball — no
+`install.packages()`.
+
+This is the **full real replay** mode: real covariates, the trial's
+*actual* recorded treatment assignment (not a fresh draw), and the
+*actual* recorded outcome — run through `InferenceSuite`, which discovers
+every applicable inference procedure for an `incidence`-response fixed
+design and reports one Cauchy-combined p-value across all of them. The
+Cauchy combination test turns a set of (possibly dependent, possibly
+correlated) p-values into one omnibus p-value by transforming each to a
+standard Cauchy variate and averaging, which — unlike Fisher's or
+Stouffer's methods — has a known closed-form null distribution that holds
+under arbitrary, unknown dependence between the inputs, with no need to
+estimate a correlation structure.[^cauchy]
+
+```r
+library(EDI)
+
+# download_experimental_datasets.R packs each dataset into its own
+# <name>.tar.bz2 (here mice_toenail.tar.bz2, containing mice_toenail.csv,
+# one row per visit) -- unpack it and collapse to one row per patient:
+untar("mice_toenail.tar.bz2", exdir = ".")
+raw <- read.csv("mice_toenail.csv")
+
+baseline <- setNames(raw[raw$visit == 1, c("ID", "outcome")], c("ID", "baseline_severity"))
+n_visits <- setNames(aggregate(visit ~ ID, raw, max), c("ID", "n_visits"))
+final <- do.call(rbind, lapply(split(raw, raw$ID), function(d) d[which.max(d$visit), ]))
+final <- final[, c("ID", "outcome", "treatment")]
+names(final)[names(final) == "outcome"] <- "final_outcome"
+tn <- Reduce(function(a, b) merge(a, b, by = "ID"), list(baseline, n_visits, final))
+
+n <- nrow(tn)
+X <- tn[, c("baseline_severity", "n_visits")]
+w <- as.integer(tn$treatment)          # 0 = terbinafine, 1 = itraconazole -- the REAL randomized assignment
+y <- as.integer(tn$final_outcome)      # 1 = moderate/severe separation at last visit, 0 = none/mild
+
+des <- DesignFixedBernoulli$new(n = n, response_type = "incidence", verbose = FALSE)
+des$add_all_subjects_to_experiment(X)
+des$overwrite_all_subject_assignments(w)  # replace the internal draw with the trial's real assignment
+des$add_all_subject_responses(y)
+
+suite <- InferenceSuite$new(des)
+set.seed(1)
+res <- suite$run_all_inference(
+  screen = TRUE, plots = FALSE, num_cores = 1L,
+  methods = c("wald", "score", "lik_ratio", "rand"),
+  max_secs_per_class = 60
+)
+```
+
+And the real output — 25 model-fits across 13 incidence inference
+classes (simple/pooled-variance mean difference, binomial-identity
+regression, CMH, exact Zhang, g-computation risk difference/ratio,
+log-binomial, logistic regression, Miettinen–Nurminen, modified Poisson,
+Newcombe, probit regression, plain risk difference), each fit with
+whichever of `wald`/`score`/`lik_ratio` applies to it:
+
+```
+n = 294  treated (itraconazole) = 148  control (terbinafine) = 146
+bad outcome (moderate/severe) at last visit: treated = 8 / 148  control = 17 / 146
+
+inference       cov      estimand    est       se        pval       pval method     status
+class           mod
+===========================================================================================
+Avg Δ                    mean Δ      -0.0624   0.0325    5.61e-02   wald            ok
+Avg Δ Pooled …           mean Δ      -0.0624   0.0324    5.55e-02   wald            ok
+Binom Ident R…  ~.       mean Δ      -0.0399   0.0294    1.65e-01   wald            ok
+Binom Ident R…  ~.       mean Δ      -0.0399   0.0294    1.45e-01   score           ok
+Binom Ident R…  ~.       mean Δ      -0.0399   0.0294    1.54e-01   lik_ratio       ok
+CMH                      mean Δ      -0.0624   0.0340    6.69e-02   wald            ok
+Exact Zhang              logodds c…  -0.804    NA        NA         NA              ok
+G Comp Risk Δ   ~.       mean Δ      -0.0594   0.0310    5.49e-02   wald            ok
+G Comp Risk R…  ~.       risk ratio  0.482     0.191     6.59e-02   wald            ok
+Log Binom       ~.       log risk …  -0.730    0.392     6.27e-02   wald            ok
+Log Binom       ~.       log risk …  NA        NA        NA         score           nonest
+Log Binom       ~.       log risk …  -0.730    0.392     5.48e-02   lik_ratio       ok
+Logist Regr     ~.       logodds m…  -0.849    0.460     6.47e-02   wald            ok
+Logist Regr     ~.       logodds m…  -0.849    0.460     5.93e-02   score           ok
+Logist Regr     ~.       logodds m…  -0.849    0.460     5.71e-02   lik_ratio       ok
+Miettinen Ris…           mean Δ      -0.0624   0.0325    5.56e-02   wald            ok
+Modified Pois…  ~.       log risk …  -0.728    0.431     9.09e-02   wald            ok
+Modified Pois…  ~.       log risk …  -0.728    0.431     8.41e-02   score           ok
+Modified Pois…  ~.       log risk …  -0.728    0.431     8.06e-02   lik_ratio       ok
+Newcombe Risk…           mean Δ      -0.0624   NA        5.87e-02   wald            ok
+Probit Regr     ~.       probit ma…  -0.417    0.227     6.68e-02   wald            ok
+Probit Regr     ~.       probit ma…  -0.417    0.227     6.57e-02   score           ok
+Probit Regr     ~.       probit ma…  -0.417    0.227     6.29e-02   lik_ratio       ok
+Risk Δ          ~.       mean Δ      -0.0602   0.0314    5.49e-02   wald            ok
+Wald                     mean Δ      -0.0624   0.0324    5.61e-02   wald            ok
+-------------------------------------------------------------------------------------------
+Status: Completed in 4s.
+
+  Estimand: logodds marginal (3 inferences): p = 0.0602
+  Estimand: log risk ratio (5 inferences)  : p = 0.0720
+  Estimand: mean Δ (11 inferences)         : p = 0.0692
+  Estimand: probit marginal (3 inferences) : p = 0.0651
+  Estimand: risk ratio (1 inferences)      : p =     NA
+
+Combined evidence against the sharp null across 5 estimands
+(23 inferences, weighting = uniform within estimand):
+p = 0.0662
+```
+
+A real, if borderline, treatment effect: itraconazole patients were less
+likely to still have moderate/severe nail separation at their last visit
+(8/148 = 5.4%) than terbinafine patients (17/146 = 11.6%), and that
+direction holds consistently across all four estimable estimand groups —
+mean difference, log-odds, log risk ratio, and probit marginal all land
+between p = 0.06 and p = 0.07, agreeing with each other in both sign and
+rough magnitude. None individually clears the conventional 0.05 threshold
+on its own at this sample size, and the Cauchy-combined p-value across all
+23 inferences (p = 0.066) reflects that honestly — a real trial with n=294
+and a 6-percentage-point difference in a fairly rare outcome sits right at
+the edge of what that sample size can resolve, and EDI reports it as such
+rather than rounding up to "significant." `Exact Zhang` and one `score`-method
+Log Binom fit report a point estimate but no usable p-value in this run —
+also shown as-is, not smoothed over.
+
+## Try it yourself
+
+The full manifest, licensing notes, and every dataset's provenance are in
+[`experimental_datasets.md`](https://github.com/kapelner/EDI/blob/main/R/package_metadata/experimental_datasets.md);
+the download script is
+[`download_experimental_datasets.R`](https://github.com/kapelner/EDI/blob/main/R/package_metadata/download_experimental_datasets.R).
+The same `DesignFixedBernoulli` + `overwrite_all_subject_assignments()` +
+`InferenceSuite` pattern above works identically on any of the other 261
+datasets — survival, count, proportion, ordinal, or continuous.
+
+**Links:** [EDI on GitHub](https://github.com/kapelner/EDI) ·
+[EDI docs](https://kapelner.github.io/EDI/)
+
+[^cauchy]: Liu, Y. and Xie, J. (2020). Cauchy Combination Test: A Powerful
+    Test With Analytic p-Value Calculation Under Arbitrary Dependency
+    Structures. *Journal of the American Statistical Association*,
+    115(529), 393–402.

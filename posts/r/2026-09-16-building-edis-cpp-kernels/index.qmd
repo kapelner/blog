@@ -3,6 +3,7 @@ title: "Building EDI's C++ kernels once, shipping them to two languages"
 description: "A short note on why EDI's model-fitting kernels are C++ underneath, and how the same source compiles into both an R package and a Python package."
 date: 2026-09-16
 categories: [r, python, c++, edi]
+draft: true  # held back 2026-09-16, saved for a later post -- not deleted
 ---
 
 I'm building [EDI](https://github.com/kapelner/EDI) (Experimental Design
